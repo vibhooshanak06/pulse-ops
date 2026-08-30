@@ -1,0 +1,14 @@
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# PulseOps SDK — installed from local path (editable)
+# Run: pip install -e ../../sdk
+# Listed here as documentation; actual install is done separately.
+
+# Settings
+pydantic-settings==2.2.1
+python-dotenv==1.0.1
+
+# Utilities
+httpx==0.27.0

@@ -1,0 +1,83 @@
+# =============================================================================
+# PulseOps AI — .gitignore
+# =============================================================================
+
+# ─── Secrets — NEVER commit these ────────────────────────────────────────────
+.env
+*.env
+!.env.example       # keep the example files
+!**/.env.example
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Type checking / linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+*.local
+
+# ─── IDEs and editors ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+
+# ─── ML models and data ───────────────────────────────────────────────────────
+ml-engine/models/*.pkl
+ml-engine/models/*.joblib
+ml-engine/data/
+
+# ─── Docker (for when we add it in Phase 17) ─────────────────────────────────
+# docker-compose.override.yml  # uncomment if you use local overrides
+
+# ─── Alembic ──────────────────────────────────────────────────────────────────
+# Keep migrations — DO commit alembic/versions/*.py
+# Only ignore the compiled cache
+alembic/__pycache__/
