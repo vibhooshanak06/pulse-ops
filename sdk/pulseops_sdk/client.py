@@ -84,19 +84,22 @@ class TelemetryClient:
         """
         Add a telemetry event to the buffer.
 
-        This is intentionally synchronous so the middleware can call it
-        without awaiting. The actual network I/O happens in the flush loop.
-        The asyncio.create_task pattern is safe here because we're always
-        inside a running event loop when serving requests.
+        Synchronous — safe to call from middleware dispatch without awaiting.
+        Immediate flush is scheduled via asyncio only if a loop is running.
         """
-        # Use call_soon_threadsafe-compatible approach:
-        # We append to the list directly (GIL-safe for single appends)
-        # and check the batch size without blocking.
         self._buffer.append(event)
 
-        # If batch is full, schedule an immediate flush
+        # Trigger an immediate flush when the batch is full.
+        # create_task only works inside a running event loop — which is always
+        # true when called from an ASGI middleware dispatch coroutine.
         if len(self._buffer) >= self._config.batch_size:
-            asyncio.create_task(self._flush())
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._flush())
+            except RuntimeError:
+                # No running loop (e.g. during testing) — flush will happen
+                # on the next periodic interval instead.
+                pass
 
     async def _flush_loop(self) -> None:
         """Periodic background flush — runs every flush_interval_seconds."""

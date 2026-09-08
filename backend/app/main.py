@@ -41,8 +41,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info(f"Environment: {settings.APP_ENV}")
 
     logger.info("Connecting to Redis...")
-    await init_redis()
-    logger.info("Redis connected.")
+    try:
+        await init_redis()
+        logger.info("Redis connected.")
+    except Exception as exc:
+        # Redis is required for caching and rate limiting (Phase 8) but
+        # the app can start without it in development — auth and telemetry
+        # ingestion work without a cache hit. Log a clear warning so the
+        # developer knows Redis is unavailable.
+        logger.warning(
+            f"Redis unavailable: {exc}. "
+            "Caching and rate limiting will be disabled until Redis is reachable. "
+            "Install Redis to enable Phase 8 features."
+        )
 
     logger.info("PulseOps AI backend ready.")
 

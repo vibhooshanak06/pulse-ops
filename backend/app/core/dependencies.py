@@ -1,10 +1,17 @@
 """
 FastAPI dependency injection.
 
-These functions are injected into route handlers via Depends().
-Centralizing them here means auth logic lives in one place —
-changing how tokens are validated only requires editing this file.
+get_current_user_id  → returns raw str UUID from JWT (lightweight, no DB hit)
+get_current_user     → returns full User ORM object (DB hit, used by most routes)
+
+Why two variants?
+  Some operations (e.g. rate-limit checks) only need the user ID, not the full
+  object. get_current_user_id avoids the DB round-trip in those cases.
+  Most routes use get_current_user which loads the User and confirms the account
+  is still active — essential after a password reset or account suspension.
 """
+
+import uuid
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -12,42 +19,62 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis_client import get_redis
 from app.core.security import decode_access_token
+from app.db.models.user import User
 from app.db.session import get_db
+from app.repositories.user_repository import UserRepository
 
-# HTTPBearer extracts the token from the Authorization: Bearer <token> header
 bearer_scheme = HTTPBearer()
 
 
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> str:
-    """
-    Validate the JWT token and return the user's ID (subject claim).
-
-    Raises HTTP 401 if the token is missing, expired, or invalid.
-    Used in every protected route.
-    """
-    token = credentials.credentials
-    payload = decode_access_token(token)
-
+    """Validate JWT and return the subject claim (user UUID as string)."""
+    payload = decode_access_token(credentials.credentials)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
     user_id: str | None = payload.get("sub")
-    if user_id is None:
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token subject missing.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
     return user_id
 
 
-# Re-export get_db and get_redis here so routes only need to import
-# from app.core.dependencies — one import location for all dependencies.
-__all__ = ["get_current_user_id", "get_db", "get_redis"]
+async def get_current_user(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Validate JWT and load the full User from the database.
+
+    Raises HTTP 401 if:
+      - The token is invalid or expired (caught by get_current_user_id)
+      - The user no longer exists
+      - The account has been deactivated
+    """
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject.",
+        )
+
+    user = await UserRepository(db).get_by_id(uid)
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or account disabled.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+__all__ = ["get_current_user_id", "get_current_user", "get_db", "get_redis"]

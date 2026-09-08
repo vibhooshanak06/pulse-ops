@@ -32,6 +32,7 @@ ASGI primer (important for understanding this code):
   modifying it, then pass everything through transparently.
 """
 
+import asyncio
 import time
 import logging
 from typing import Callable
@@ -62,17 +63,23 @@ class PulseOpsMiddleware(BaseHTTPMiddleware):
         self._config = config
         self._client = TelemetryClient(config)
         self._started = False
+        self._start_lock: asyncio.Lock | None = None   # created inside event loop
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip paths that should not be instrumented (health checks, docs, etc.)
         if self._should_exclude(request.url.path):
             return await call_next(request)
 
-        # Lazy start — initialize the client on the first real request.
-        # This ensures we're inside a running event loop when we call start().
+        # Thread-safe lazy start using an asyncio.Lock created on first call.
+        # We can't create the Lock in __init__ because __init__ runs before
+        # the event loop starts in some ASGI server configurations.
+        if self._start_lock is None:
+            self._start_lock = asyncio.Lock()
         if not self._started:
-            await self._client.start()
-            self._started = True
+            async with self._start_lock:
+                if not self._started:   # double-checked under lock
+                    await self._client.start()
+                    self._started = True
 
         # ── Capture timing ────────────────────────────────────────────────────
         start_time = time.perf_counter()
