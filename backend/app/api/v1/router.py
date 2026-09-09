@@ -14,13 +14,8 @@ URL hierarchy mirrors the ownership model:
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
-    auth,
-    organizations,
-    projects,
-    services,
-    api_keys,
-    telemetry,
-    metrics,
+    auth, organizations, projects, services,
+    api_keys, telemetry, metrics, anomalies,
 )
 
 api_router = APIRouter()
@@ -76,4 +71,11 @@ api_router.include_router(
     telemetry.router,
     prefix="/telemetry",
     tags=["Telemetry"],
+)
+
+# ── Anomalies (nested under project) ──────────────────────────────────────────
+api_router.include_router(
+    anomalies.router,
+    prefix="/organizations/{org_id}/projects/{project_id}/anomalies",
+    tags=["Anomalies"],
 )
