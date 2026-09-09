@@ -6,14 +6,10 @@ from app.repositories.api_key_repository import ApiKeyRepository
 from app.repositories.endpoint_repository import EndpointRepository
 from app.repositories.telemetry_repository import TelemetryRepository
 from app.repositories.metrics_repository import MetricsRepository
+from app.repositories.anomaly_repository import AnomalyRepository
 
 __all__ = [
-    "UserRepository",
-    "OrganizationRepository",
-    "ProjectRepository",
-    "ServiceRepository",
-    "ApiKeyRepository",
-    "EndpointRepository",
-    "TelemetryRepository",
-    "MetricsRepository",
+    "UserRepository", "OrganizationRepository", "ProjectRepository",
+    "ServiceRepository", "ApiKeyRepository", "EndpointRepository",
+    "TelemetryRepository", "MetricsRepository", "AnomalyRepository",
 ]
