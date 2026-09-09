@@ -23,6 +23,15 @@ from app.schemas.telemetry import (
     TelemetryBatchRequest,
     TelemetryBatchResponse,
 )
+from app.schemas.metrics import (
+    MetricWindow,
+    CurrentMetricsSnapshot,
+    EndpointMetricRow,
+    ServiceMetricsResponse,
+    ServiceSummary,
+    OverviewResponse,
+    ServiceHealthResponse,
+)
 from app.schemas.common import MessageResponse, ErrorResponse
 
 __all__ = [

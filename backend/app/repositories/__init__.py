@@ -5,6 +5,7 @@ from app.repositories.service_repository import ServiceRepository
 from app.repositories.api_key_repository import ApiKeyRepository
 from app.repositories.endpoint_repository import EndpointRepository
 from app.repositories.telemetry_repository import TelemetryRepository
+from app.repositories.metrics_repository import MetricsRepository
 
 __all__ = [
     "UserRepository",
@@ -14,4 +15,5 @@ __all__ = [
     "ApiKeyRepository",
     "EndpointRepository",
     "TelemetryRepository",
+    "MetricsRepository",
 ]
