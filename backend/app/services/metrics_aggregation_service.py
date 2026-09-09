@@ -36,6 +36,7 @@ TRIGGER:
   always shows fresh metrics without waiting for a cron job.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -44,10 +45,13 @@ import numpy as np
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache_service import CacheService
 from app.db.models.service import Service
 from app.db.models.telemetry_event import TelemetryEvent
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.service_repository import ServiceRepository
+
+logger = logging.getLogger(__name__)
 
 
 # ── Health thresholds ─────────────────────────────────────────────────────────
@@ -137,8 +141,9 @@ class MetricAggregationService:
         await svc.aggregate_service(service_id, window_minutes=60)
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, cache: CacheService | None = None) -> None:
         self._db       = db
+        self._cache    = cache
         self._metrics  = MetricsRepository(db)
         self._services = ServiceRepository(db)
 
@@ -212,6 +217,38 @@ class MetricAggregationService:
             )
             await self._services.update_health_and_last_seen(service_id, health)
 
+            # ── Redis: write health snapshot + invalidate stale metrics cache ──
+            if self._cache:
+                svc_id_str = str(service_id)
+
+                # Write the new health snapshot so GET /health is a cache hit
+                last_win = results[-1]
+                snapshot_payload = {
+                    "service_id":    svc_id_str,
+                    "service_name":  "",        # filled by caller (MetricsApiService)
+                    "health_status": health,
+                    "current": {
+                        "avg_latency_ms":  last_win["avg_latency_ms"],
+                        "p50_latency_ms":  last_win["p50_latency_ms"],
+                        "p95_latency_ms":  last_win["p95_latency_ms"],
+                        "p99_latency_ms":  last_win["p99_latency_ms"],
+                        "error_rate":      last_win["error_rate"],
+                        "request_count":   last_win["request_count"],
+                        "throughput_rpm":  last_win["throughput_rpm"],
+                        "health_status":   health,
+                        "window_minutes":  window_size_minutes,
+                    },
+                }
+                await self._cache.set_health_snapshot(svc_id_str, snapshot_payload)
+
+                # Invalidate any stale service metrics cache so the next
+                # dashboard request fetches fresh aggregates
+                await self._cache.invalidate_service_metrics(svc_id_str)
+                logger.debug(
+                    "Cache: wrote health snapshot + invalidated metrics for service %s",
+                    svc_id_str[:8],
+                )
+
         return results
 
     async def aggregate_endpoints(
@@ -271,8 +308,18 @@ class MetricAggregationService:
         """
         Aggregate all services in a project — called by the scheduler.
         Also triggers endpoint-level aggregation for each service.
+        After all services are aggregated, invalidates the project overview
+        cache so the next overview request reflects the fresh data.
         """
         services = await self._services.list_for_project(project_id)
         for service in services:
             await self.aggregate_service(service.id, window_minutes)
             await self.aggregate_endpoints(service.id, window_minutes)
+
+        # Invalidate project-level overview cache after all services refreshed
+        if self._cache and services:
+            await self._cache.invalidate_project_overview(str(project_id))
+            logger.debug(
+                "Cache: invalidated project overview for project %s",
+                str(project_id)[:8],
+            )
